@@ -1,5 +1,3 @@
-# chat.py
-
 from fastapi import APIRouter, HTTPException
 from openai import OpenAIError, OpenAI
 from pydantic import BaseModel
@@ -7,14 +5,17 @@ from typing import List, Optional
 import os
 from sqlalchemy.orm import Session
 from fastapi import Depends
+from dotenv import load_dotenv
 from .chat_history import ChatHistory, SessionLocal
 
-# Store chat history in-memory for each session (you can use a more robust solution like a database)
-chat_sessions = {}
+load_dotenv()
 
-# OpenAI API key setup
+API_KEY = os.getenv("OPENAI_API_KEY")
+if not API_KEY:
+    raise ValueError("API key for OpenAI is not set. Please define it in the .env file.")
+
 client = OpenAI(
-    api_key="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"
+    api_key=API_KEY
 )
 
 class FileDetail(BaseModel):
@@ -25,7 +26,7 @@ class ChatRequest(BaseModel):
     question: str
     selected_files: List[FileDetail]
     directory_path: Optional[str] = None
-    session_id: str  # Unique session identifier to track chat history
+    session_id: str
 
 def read_file(file_path: str, directory_path) -> str:
     full_path = os.path.join(directory_path, file_path.replace("/", os.sep))
@@ -37,7 +38,6 @@ def read_file(file_path: str, directory_path) -> str:
         print(f"Error reading file {full_path}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error reading file {full_path}: {str(e)}")
 
-# Create FastAPI router
 router = APIRouter()
 
 def get_db():
@@ -50,15 +50,12 @@ def get_db():
 @router.post("/ask/")
 async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
     try:
-        # Fetch the chat history for the current session
         chat_history = db.query(ChatHistory).filter(ChatHistory.session_id == request.session_id).all()
 
-        # Build the chat history context
         history_context = ""
         for entry in chat_history:
             history_context += f"Q: {entry.question}\nA: {entry.answer}\n\n"
 
-        # Initialize the full context to send to OpenAI
         context = history_context
 
         if "CODE" in request.question:
@@ -70,7 +67,6 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
 
         context += f"Q: {request.question}\n"
 
-        # Call OpenAI API to get the response
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -82,10 +78,8 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
         if not response.choices:
             raise HTTPException(status_code=500, detail="No choices in OpenAI API response")
 
-        # Extract the answer from the response
         answer = response.choices[0].message.content
 
-        # Store the question and answer in the database
         chat_entry = ChatHistory(session_id=request.session_id, question=request.question, answer=answer)
         db.add(chat_entry)
         db.commit()
@@ -99,8 +93,6 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
-
-
 
 @router.get("/history/")
 async def get_chat_history(session_id: str, db: Session = Depends(get_db)):
