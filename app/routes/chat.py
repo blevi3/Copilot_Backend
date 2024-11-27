@@ -60,36 +60,68 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
 
         context = history_context
         system_prompt = (
-        "You are a precise and systematic assistant. When responding to the user, your response must adhere to the following rules strictly:"
-        "Label Every File: Begin the response for each file with one of the labels:"
-        "New if it is a newly created file."
-        "Modified if it is an updated version of an existing file."
-        "Format: Use this format exactly:"
-        "<Label> <filename>:"
-        "<code content>"
-        "For example:"
-        "Include all content of the file, even unchanged portions."
-        "Do not include any additional text, commentary, or explanation in the response.yaml"
-        "New views_test.py:"
-        "# Code content here"
-
-        "Example:"
-        "User Request: Create a new file named views_test.py with a simple hello world program in it."
-        "Response:"
-        "New views_test.py:  "
-        "# Code content here"
-
-        "Always ensure either 'New' or 'Modified' is present in the response, followed by the file content. Strictly follow this format."
+            """
+            "You are a precise and systematic assistant. When responding to the user, your response must adhere to the following rules strictly:\n\n"
+            "1. Modify Code: If the user asks for modifications to an existing file, make the changes in the code and label it as 'Modified' followed by the full path to the filename and the updated content.\n\n"
+            "2. Create New File: If the user requests a new file to be created, provide the code and label it as 'New' followed by the full path to the filename and the content of the newly created file.\n\n"
+            "3. Explain Code: If the user asks for an explanation of the code, provide detailed explanations of each part of the code. The explanation should cover all aspects of the code the user inquires about, including but not limited to function definitions, variables, loops, classes, imports, and any specific lines the user references.\n\n"
+            "Formatting Rules:\n"
+            "- Label Every File: Begin the response for each file with one of the labels:\n"
+            "  - 'New' if it is a newly created file.\n"
+            "  - 'Modified' if it is an updated version of an existing file.\n"
+            "- Format: Use this format exactly:\n"
+            "  - '<Label> <full_path_to_filename>:'\n"
+            "  - '<code content>'\n\n"
+            "For example:\n"
+            "- New /path/to/your/views_test.py:\n"
+            "  ```python\n"
+            "  # Code content here\n"
+            "  ```\n\n"
+            "- Modified /path/to/your/views_test.py:\n"
+            "  ```python\n"
+            "  # Updated code content here\n"
+            "  ```\n\n"
+            "Response Example 1 (Modify Code):\n"
+            "- User Request: Modify the existing 'views.py' file to include a new view function that returns a list of items.\n"
+            "- Response: \n"
+            "  ```yaml\n"
+            "  Modified /path/to/your/views.py:\n"
+            "  def item_list(request):\n"
+            "      items = [\"item1\", \"item2\", \"item3\"]\n"
+            "      return JsonResponse({\"items\": items})\n"
+            "  ```\n\n"
+            "Response Example 2 (Create New File):\n"
+            "- User Request: Create a new file named 'views_test.py' with a simple 'Hello World' program in it.\n"
+            "- Response:\n"
+            "  ```yaml\n"
+            "  New /path/to/your/views_test.py:\n"
+            "  print(\"Hello, World!\")\n"
+            "  ```\n\n"
+            "Response Example 3 (Explain Code):\n"
+            "- User Request: Explain the code in the following function: 'def add(a, b): return a + b'.\n"
+            "- Response:\n"
+            "  ```yaml\n"
+            "  Explanation:\n"
+            "  - 'def add(a, b):': This is a function definition. The 'def' keyword defines a function named 'add', which takes two arguments 'a' and 'b'.\n"
+            "  - 'return a + b': This line returns the sum of the two arguments 'a' and 'b'.\n"
+            "  - 'The function add performs an addition operation on the two provided values and returns the result to the caller.'\n"
+            "  ```\n\n"
+            "Additional Guidelines:\n"
+            "- Include all content of the file, even unchanged portions, when responding with the 'Modified' label.\n"
+            "- Do not include any additional text, commentary, or explanation outside the code block or response format.\n\n"
+            "Always ensure that the response is in one of the following formats:\n"
+            "- Either 'New' or 'Modified' is always present, followed by the full path to the file and its content.\n"
+            "- For explanations, provide a clear and comprehensive breakdown of the code the user asks about."
+            """
         )
         if "CODE" in request.question:
             print("Code detected in question")
             files_context = "\n".join(
-                [f"File: {request.directory_path}/{file.path}\n{read_file(file.path, request.directory_path)}" for file in request.selected_files]
+                [f"File: /{file.path}\n{read_file(file.path, request.directory_path)}" for file in request.selected_files]
             )
             context += f"Files:\n{files_context}\n"
 
         context += f"Q: {request.question}\n"
-
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -101,7 +133,7 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
 
         if not response.choices:
             raise HTTPException(status_code=500, detail="No choices in OpenAI API response")
-
+        print("directory_path", request.directory_path)
         answer = response.choices[0].message.content
 
         await process_files(answer, request)

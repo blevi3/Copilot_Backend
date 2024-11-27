@@ -88,7 +88,7 @@ async def process_files(answer, request):
     print("Processing files...")
 
     # Updated regex to capture the full file path (with slashes or backslashes), keyword, and content
-    file_regex = r"(New|Modified)\s+([A-Za-z0-9/\\_.: -]+(?:[\\/][A-Za-z0-9/\\_.: -]+)*):\s*```python\n(.*?)```"
+    file_regex = r"(New|Modified)\s+([A-Za-z0-9/\\_.: -]+(?:[\\/][A-Za-z0-9/\\_.: -]+)*):\s*([\s\S]+?)(?=\n(?:New|Modified)|$)"
 
     # Find all matches for both New and Modified files
     matches = re.findall(file_regex, answer, re.DOTALL)
@@ -98,13 +98,14 @@ async def process_files(answer, request):
         action, file_name, content = match  # Unpack the three captured groups
         print(f"Action: {action} | File: {file_name} | Content: {content[:30]}...")  # Print first 30 chars
 
-        # Call the appropriate function based on the action (New or Modified)
+        print(f"Path: {file_name}")
+        full_path = request.directory_path + file_name
         try:
             if action == "Modified":
-                print(f"Updating file {file_name}")
-                await update_file_content(file_name, content.strip())
+                print(f"Updating file {full_path}")
+                await update_file_content(full_path, content.strip())
             elif action == "New":
-                print(f"Creating new file {file_name}")
-                await create_new_file_content(file_name, content.strip())
+                print(f"Creating new file {full_path}")
+                await create_new_file_content(full_path, content.strip())
         except Exception as e:
-            print(f"Error with file {file_name}: {str(e)}")
+            print(f"Error with file {full_path}: {str(e)}")
