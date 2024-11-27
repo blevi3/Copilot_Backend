@@ -84,7 +84,7 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
         if "CODE" in request.question:
             print("Code detected in question")
             files_context = "\n".join(
-                [f"File: {file.name}\n{read_file(file.path, request.directory_path)}" for file in request.selected_files]
+                [f"File: {request.directory_path}/{file.path}\n{read_file(file.path, request.directory_path)}" for file in request.selected_files]
             )
             context += f"Files:\n{files_context}\n"
 

@@ -86,26 +86,25 @@ async def create_new_file_content(file_path: str, content: str):
 
 async def process_files(answer, request):
     print("Processing files...")
-    # Regex to capture the keyword (New or Modified), file name, and content
-    file_regex = r"(New|Modified)\s+(\w+\.\w+):\s*```python\n(.*?)```"
+
+    # Updated regex to capture the full file path (with slashes or backslashes), keyword, and content
+    file_regex = r"(New|Modified)\s+([A-Za-z0-9/\\_.: -]+(?:[\\/][A-Za-z0-9/\\_.: -]+)*):\s*```python\n(.*?)```"
 
     # Find all matches for both New and Modified files
     matches = re.findall(file_regex, answer, re.DOTALL)
     print(f"Found {len(matches)} files to process.")
+
     for match in matches:
         action, file_name, content = match  # Unpack the three captured groups
         print(f"Action: {action} | File: {file_name} | Content: {content[:30]}...")  # Print first 30 chars
-
-        # Determine the full file path
-        full_file_path = os.path.join(request.directory_path, file_name)
 
         # Call the appropriate function based on the action (New or Modified)
         try:
             if action == "Modified":
                 print(f"Updating file {file_name}")
-                await update_file_content(full_file_path, content.strip())
+                await update_file_content(file_name, content.strip())
             elif action == "New":
                 print(f"Creating new file {file_name}")
-                await create_new_file_content(full_file_path, content.strip())
+                await create_new_file_content(file_name, content.strip())
         except Exception as e:
             print(f"Error with file {file_name}: {str(e)}")
