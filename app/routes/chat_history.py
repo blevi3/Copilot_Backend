@@ -12,6 +12,7 @@ class ChatHistory(Base):
     session_id = Column(String, index=True)
     question = Column(Text)
     answer = Column(Text)
+    path = Column(Text)
 
 DATABASE_URL = "sqlite:///./test.db"
 engine = create_engine(DATABASE_URL)

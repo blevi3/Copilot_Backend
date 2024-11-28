@@ -8,7 +8,7 @@ from fastapi import Depends
 from dotenv import load_dotenv
 from .chat_history import ChatHistory, SessionLocal
 import re
-from .file_manager import update_file_content, create_new_file_content, process_files
+from .file_manager import process_files
 
 load_dotenv()
 
@@ -138,7 +138,7 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
 
         await process_files(answer, request)
 
-        chat_entry = ChatHistory(session_id=request.session_id, question=request.question, answer=answer)
+        chat_entry = ChatHistory(session_id=request.session_id, question=request.question, answer=answer, path = request.directory_path)
         db.add(chat_entry)
         db.commit()
         db.refresh(chat_entry)
@@ -157,3 +157,21 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
 async def get_chat_history(session_id: str, db: Session = Depends(get_db)):
     chat_history = db.query(ChatHistory).filter(ChatHistory.session_id == session_id).all()
     return {"history": chat_history}
+
+@router.get("/conversations/")
+async def get_all_conversations(db: Session = Depends(get_db)):
+    conversations = db.query(ChatHistory.session_id).distinct().all()
+    print({"conversations": [conv[0] for conv in conversations]})
+    return {"conversations": [conv[0] for conv in conversations]}
+
+@router.get("/continue-conversation/{session_id}/")
+async def continue_conversation(session_id: str, db: Session = Depends(get_db)):
+    chat_history = db.query(ChatHistory).filter(ChatHistory.session_id == session_id).all()
+    if not chat_history:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+
+    history_context = ""
+    for entry in chat_history:
+        history_context += f"Q: {entry.question}\nA: {entry.answer}\n\n"
+    
+    return {"conversation": history_context}
