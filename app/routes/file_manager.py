@@ -11,13 +11,17 @@ class DirectoryPath(BaseModel):
 
 def build_hierarchy(directory_path: Path):
     """
-    Recursively build the directory structure hierarchy.
+    Recursively build the directory structure hierarchy, excluding specific folders.
     """
     if not directory_path.is_dir():
         return None
 
+    excluded_folders = {"node_modules", "venv"}
+
     children = []
     for item in directory_path.iterdir():
+        if item.name in excluded_folders:
+            continue
         if item.is_dir():
             children.append({
                 "name": item.name,
@@ -32,6 +36,7 @@ def build_hierarchy(directory_path: Path):
             })
 
     return children
+
 
 @router.post("/select-directory/")
 async def select_directory(data: DirectoryPath):

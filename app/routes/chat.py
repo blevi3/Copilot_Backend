@@ -6,7 +6,8 @@ import os
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from dotenv import load_dotenv
-from .chat_history import ChatHistory, SessionLocal
+from models.chat_history import ChatHistory, SessionLocal
+from models.ChatSession import ChatSession
 import re
 from .file_manager import process_files
 
@@ -123,7 +124,7 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
 
         context += f"Q: {request.question}\n"
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": context}
@@ -142,6 +143,22 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
         db.add(chat_entry)
         db.commit()
         db.refresh(chat_entry)
+
+        if not db.query(ChatSession).filter(ChatSession.session_id == request.session_id).first():
+            summary_response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "Summarize the chat in three words."},
+                    {"role": "user", "content": context},
+                ],
+            )
+            if not summary_response.choices:
+                raise HTTPException(status_code=500, detail="Failed to generate chat name")
+
+            chat_name = summary_response.choices[0].message.content.strip()
+            chat_session = ChatSession(session_id=request.session_id, chat_name=chat_name)
+            db.add(chat_session)
+            db.commit()
 
         return {"answer": answer}
 
@@ -170,7 +187,9 @@ async def get_chat_history(session_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/conversations/")
-async def get_all_conversations(db: Session = Depends(get_db)):
-    conversations = db.query(ChatHistory.session_id).distinct().all()   
-    return {"conversations": [conv[0] for conv in conversations]}
+def get_conversations(db: Session = Depends(get_db)):
+    sessions = db.query(ChatSession).all()
+    print({"conversations": [{"session_id": s.session_id, "chat_name": s.chat_name} for s in sessions]})
+    return {"conversations": [{"session_id": s.session_id, "chat_name": s.chat_name} for s in sessions]}
+
 
