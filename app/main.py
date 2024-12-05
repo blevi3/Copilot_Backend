@@ -1,3 +1,4 @@
+# main.py in app
 from fastapi import FastAPI
 from routes import file_manager, chat
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,4 +15,3 @@ app.add_middleware(
 
 app.include_router(file_manager.router, prefix="/api/files", tags=["files"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
-

@@ -1,3 +1,4 @@
+# chat.py in routes
 from fastapi import APIRouter, HTTPException
 from openai import OpenAIError, OpenAI
 from pydantic import BaseModel
@@ -115,6 +116,7 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
             "- For explanations, provide a clear and comprehensive breakdown of the code the user asks about."
             """
         )
+
         if "CODE" in request.question:
             print("Code detected in question")
             files_context = "\n".join(
@@ -137,7 +139,7 @@ async def ask_question(request: ChatRequest, db: Session = Depends(get_db)):
         print("directory_path", request.directory_path)
         answer = response.choices[0].message.content
 
-        await process_files(answer, request)
+        await process_files(answer, request, db)
 
         chat_entry = ChatHistory(session_id=request.session_id, question=request.question, answer=answer, path = request.directory_path)
         db.add(chat_entry)
@@ -189,7 +191,4 @@ async def get_chat_history(session_id: str, db: Session = Depends(get_db)):
 @router.get("/conversations/")
 def get_conversations(db: Session = Depends(get_db)):
     sessions = db.query(ChatSession).all()
-    print({"conversations": [{"session_id": s.session_id, "chat_name": s.chat_name} for s in sessions]})
     return {"conversations": [{"session_id": s.session_id, "chat_name": s.chat_name} for s in sessions]}
-
-
