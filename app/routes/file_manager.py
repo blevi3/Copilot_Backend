@@ -8,6 +8,7 @@ from models.file_history import FileHistory
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from models.chat_history import SessionLocal
+from fastapi import Query
 
 router = APIRouter()
 
@@ -61,12 +62,18 @@ async def update_file_content(file_path: str, content: str, db: Session):
     full_path = os.path.normpath(file_path)
     print(f"Updating file: {full_path}")
     try:
+        existing_entry = db.query(FileHistory).filter(FileHistory.file_path == file_path).first()
+        print(f"Existing entry: {existing_entry}")
+        if existing_entry:
+            db.delete(existing_entry)
+            db.commit()
+            print(f"Removed existing history for file: {full_path}")
 
         if os.path.exists(full_path):
             with open(full_path, "r") as file:
                 current_content = file.read()
                 history_entry = FileHistory(
-                    file_path=full_path,
+                    file_path=os.path.normpath(full_path).replace("\\", "/"),
                     content=current_content,
                 )
                 db.add(history_entry)
@@ -78,6 +85,8 @@ async def update_file_content(file_path: str, content: str, db: Session):
             if content.endswith("```"):
                 content = content[:-3]
             if content.startswith("```python"):
+                content = content[:-9]
+            if content.endswith("```python"):
                 content = content[:-9]
             file.write(content)
             print("File content written successfully.")
@@ -124,7 +133,6 @@ async def process_files(answer, request, db):
         full_path = request.directory_path + file_name
         try:
             if action == "Modified":
-                print(f"Updating file {full_path}")
                 await update_file_content(full_path, content.strip(), db)
             elif action == "New":
                 print(f"Creating new file {full_path}")
@@ -165,9 +173,31 @@ async def revert_file(file_path: str, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error reverting file {file_path}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error reverting file {file_path}: {str(e)}")
-    
+    from fastapi import Query
+
+
 @router.get("/modified-files/")
-async def get_modified_files(db: Session = Depends(get_db)):
-    files = db.query(FileHistory).distinct(FileHistory.file_path).all()
-    return [{"file_path": file.file_path, "last_modified": file.timestamp} for file in files]
+async def get_modified_files(directory: str = Query(...), db: Session = Depends(get_db)):
+    # Normalize directory slashes for consistent comparison
+    normalized_directory = directory.replace("\\", "/")
+    directory_length = len(normalized_directory)
+
+    # Fetch all files from the database
+    all_files = db.query(FileHistory).all()
+
+    # Filter files in Python
+    filtered_files = [
+        file for file in all_files
+        if file.file_path.replace("\\", "/").startswith(normalized_directory)
+    ]
+    for file in filtered_files:
+        print("file_path:", file.file_path)
+    
+    print("directory:", directory)
+    
+    # Prepare the response
+    return [{"file_path": file.file_path, "last_modified": file.timestamp} for file in filtered_files]
+
+
+
 
